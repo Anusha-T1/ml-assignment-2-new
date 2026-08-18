@@ -1,4 +1,4 @@
-# Cellar Check — spotting a premium wine from its lab chemistry
+# Wine Quality Classification — Comparison of Six Supervised Models
 
 Machine Learning · Assignment 2 · M.Tech (AIML/DSE), BITS Pilani WILP
 
@@ -6,34 +6,36 @@ Machine Learning · Assignment 2 · M.Tech (AIML/DSE), BITS Pilani WILP
 
 ## a. Problem statement
 
-A wine's commercial grade is decided by human tasters — a slow, expensive and
-notoriously inconsistent process. This project asks whether the eleven
-physicochemical measurements a lab can produce in minutes (acidity, sulphates,
-alcohol, and so on), plus the colour of the wine, carry enough signal to flag a
-**premium** bottle before anyone opens it.
+Wine quality is conventionally assessed by trained human tasters, a process that
+is slow, costly and subject to inter-rater variability. This project evaluates
+whether the eleven physicochemical properties measurable in a laboratory
+(acidity, sulphates, alcohol content and related variables), together with the
+wine type, are sufficient to predict whether a wine will be rated as premium.
 
-Formally: a **binary classification** task. Each bottle is labelled
+The task is formulated as **binary classification**. Each instance is labelled:
 
 * `is_premium = 1` when the median sensory score awarded by the tasting panel is **≥ 7**
 * `is_premium = 0` otherwise
 
-Only about **19%** of bottles clear that bar, so the problem is deliberately
-imbalanced. That makes plain accuracy a misleading headline — a model that calls
-everything "everyday" already scores 81%. The comparison below therefore leans on
-**MCC** and **AUC**, which do not reward that shortcut.
+Approximately **19%** of instances belong to the positive class, so the dataset
+is imbalanced. Accuracy alone is therefore an inadequate measure of performance:
+a trivial classifier predicting the majority class for every instance achieves
+81% accuracy. The comparison below consequently emphasises **MCC** and **AUC**,
+neither of which rewards that degenerate strategy.
 
 ## b. Dataset description
 
 **Source:** Wine Quality Data Set — Cortez, Cerdeira, Almeida, Matos & Reis (2009),
 UCI Machine Learning Repository
 ([archive.ics.uci.edu/dataset/186/wine+quality](https://archive.ics.uci.edu/dataset/186/wine+quality)).
-Two CSVs — `winequality-red.csv` and `winequality-white.csv` — are merged here into
-a single table, with a `wine_type` indicator added so that colour becomes a usable
-predictor rather than a hidden confounder.
+The two source files, `winequality-red.csv` and `winequality-white.csv`, are
+merged into a single table with an added `wine_type` indicator, so that wine
+colour is modelled explicitly as a predictor rather than left as an unobserved
+confounding variable.
 
 | Property | Value |
 |---|---|
-| Instances after merge and de-duplication | **5,320** (from 6,497 raw rows; 1,177 exact duplicates dropped) |
+| Instances after merging and de-duplication | **5,320** (from 6,497 raw rows; 1,177 exact duplicates removed) |
 | Features | **12** (11 continuous physicochemical + 1 binary colour flag) |
 | Target | `is_premium` — binary, derived from the 0–10 `quality` score |
 | Class balance | 1,009 premium (18.97%) vs 4,311 everyday (81.03%) |
@@ -45,7 +47,7 @@ predictor rather than a hidden confounder.
 | # | Feature | Unit / meaning |
 |---|---|---|
 | 1 | `fixed_acidity` | g(tartaric acid)/dm³ |
-| 2 | `volatile_acidity` | g(acetic acid)/dm³ — the vinegar note |
+| 2 | `volatile_acidity` | g(acetic acid)/dm³ |
 | 3 | `citric_acid` | g/dm³ |
 | 4 | `residual_sugar` | g/dm³ |
 | 5 | `chlorides` | g(sodium chloride)/dm³ |
@@ -57,12 +59,12 @@ predictor rather than a hidden confounder.
 | 11 | `alcohol` | % volume |
 | 12 | `wine_type` | 1 = red, 0 = white |
 
-**Preprocessing.** Exact duplicate rows are dropped (the raw files contain many —
-the same wine sampled twice). All 12 features are standardised with a
-`StandardScaler` fitted on the training split only, then persisted alongside the
-models so the Streamlit app applies exactly the same transform at inference time.
-`test_data.csv` in this repo *is* the held-out 25% slice — the models have never
-seen it.
+**Preprocessing.** Exact duplicate rows are removed, as the raw files contain a
+substantial number of repeated records. All 12 features are standardised using a
+`StandardScaler` fitted on the training split only, and the fitted scaler is
+persisted alongside the models so that the Streamlit application applies an
+identical transformation at inference time. The `test_data.csv` file in this
+repository is the held-out 25% partition, which was not used during training.
 
 ## c. GitHub repository link
 
@@ -75,7 +77,7 @@ ml-assignment-2-new/
 │-- app.py                     Streamlit front end
 │-- requirements.txt
 │-- README.md
-│-- test_data.csv              held-out 25% slice (1,330 bottles)
+│-- test_data.csv              held-out 25% partition (1,330 instances)
 │-- data/
 │   │-- winequality-red.csv    raw UCI inputs
 │   │-- winequality-white.csv
@@ -96,9 +98,10 @@ Reproduce with `pip install -r requirements.txt`, then
 
 ## d. Models used
 
-Six classifiers, all fitted on the same standardised training split and scored on
-the same 1,330-bottle held-out set. Hyperparameters were hand-tuned; the
-class-imbalance handling differs by model and is noted in the observations.
+Six classifiers were fitted on the same standardised training split and
+evaluated on the same 1,330-instance held-out set. Hyperparameters were tuned
+manually; the treatment of class imbalance varies by model and is described in
+the observations.
 
 | ML Model Name | Accuracy | AUC | Precision | Recall | F1 | MCC |
 |---|---|---|---|---|---|---|
@@ -110,7 +113,7 @@ class-imbalance handling differs by model and is noted in the observations.
 | Support Vector Machine (RBF) | 0.7436 | 0.8453 | 0.4086 | **0.7897** | **0.5386** | 0.4250 |
 
 *Precision, recall and F1 are reported for the positive (premium) class.
-AUC uses predicted probabilities. Configuration: LogReg `C=0.8, class_weight=balanced`;
+AUC is computed from predicted class probabilities. Configuration: LogReg `C=0.8, class_weight=balanced`;
 Decision Tree `entropy, max_depth=9, min_samples_leaf=8, class_weight=balanced`;
 kNN `k=17, distance-weighted, Manhattan`; GaussianNB `var_smoothing=1e-8`;
 Random Forest `450 trees, max_features=sqrt, unweighted`; SVC `RBF, C=3.0, class_weight=balanced`.*
@@ -119,24 +122,24 @@ Random Forest `450 trees, max_features=sqrt, unweighted`; SVC `RBF, C=3.0, class
 
 | ML Model Name | Observation about model performance |
 |---|---|
-| **Logistic Regression** | Surprisingly competitive for a linear model — AUC 0.821 says the premium/everyday boundary is *mostly* linear in these 12 standardised features, with alcohol and volatile acidity doing most of the work. Class balancing pushes it into a high-recall, low-precision regime: it catches 78% of premium bottles but only 39% of what it flags is actually premium. Its accuracy (0.731) is *below* the 0.810 no-skill baseline, which is exactly the trade the balanced weighting makes. Cheap, stable and fully interpretable — a sensible floor for the others to beat. |
-| **Decision Tree** | The weakest ranker in the set (AUC 0.778). A single tree emits coarse, piecewise-constant probabilities, so it cannot produce the smooth confidence ordering AUC rewards, even though its hard-label scores (accuracy 0.735, F1 0.511) sit right alongside logistic regression. Depth 9 with a leaf floor of 8 was needed to stop it memorising the training split; left unpruned it overfitted badly. Useful mainly as the diagnostic that shows what one tree gives you and what 450 of them add. |
-| **kNN** | The clearest illustration of why accuracy alone misleads here. At 0.837 it posts the second-highest accuracy in the table, but it gets there by being conservative: recall of just 0.361 means it misses nearly two-thirds of premium bottles. With k=17 and distance weighting, a genuinely premium wine sitting in a neighbourhood of ordinary ones is simply outvoted — and in an 81/19 split most neighbourhoods are ordinary. Precision 0.619 is decent, so when it does call premium it is usually right. |
-| **Naive Bayes** | Last on every single metric (MCC 0.295, AUC 0.735), and the reason is structural rather than tuning. GaussianNB assumes the 12 features are conditionally independent given the class, which this dataset flatly violates — density is nearly a deterministic function of alcohol and residual sugar, and the two sulfur dioxide columns are strongly correlated. Those redundant signals get counted several times over, producing overconfident and badly calibrated posteriors. Fast to train, but the wrong inductive bias for correlated chemistry. |
-| **Random Forest (Ensemble)** | The best overall model: top accuracy (0.847), top AUC (0.854), top precision (0.674) and top MCC (0.426). Bagging plus feature subsampling fixes exactly what broke the single tree — variance — while the ensemble average restores the fine-grained probability ordering that lifts AUC by 8 points over one tree. Notably it scored *better* left unweighted: forcing `class_weight='balanced_subsample'` cost roughly 3 MCC points, because re-weighting pulled its precision down faster than it lifted recall. Its remaining weakness is recall (0.377) at the default 0.5 threshold — this is a threshold choice, not a modelling limit, and moving the cutoff would trade precision back for recall. |
-| **Support Vector Machine (RBF)** | Effectively tied with the forest on MCC (0.425 vs 0.426) while occupying the opposite corner of the trade-off: best recall in the whole table (0.790) and best F1 (0.539), at the cost of accuracy (0.744). The RBF kernel plus balanced class weights carves out a curved, deliberately generous premium region. Slowest to fit of the six, and the least interpretable, but if the business cost is *missing* a good bottle rather than over-flagging one, this is the model to ship. |
-| **Overall winner for this dataset** | **Random Forest (Ensemble)** — it leads on MCC (0.4256), AUC (0.8541), accuracy (0.8474) and precision (0.6738), so it is the strongest single answer on the metric that matters most under a 19% positive rate. The honest caveat: its MCC edge over the RBF SVM is 0.0006, i.e. noise, and the SVM more than doubles its recall. The tree ensemble wins on ranking quality and on being right when it commits; the SVM wins on coverage. For a screening use case where a missed premium bottle costs more than a false alarm, the SVM is the better deployment — and the app lets you switch between them and see that trade-off directly. A broader point: no model clears MCC 0.43, which suggests lab chemistry alone genuinely caps out somewhere short of replacing the tasting panel. |
+| **Logistic Regression** | Performs competitively for a linear model. An AUC of 0.821 indicates that the decision boundary between the two classes is largely linear in the 12 standardised features, with alcohol and volatile acidity contributing most of the discriminative power. Balanced class weighting shifts the model into a high-recall, low-precision regime: it identifies 78% of premium instances, but only 39% of its positive predictions are correct. Its accuracy (0.731) falls below the 0.810 majority-class baseline, which is the expected consequence of the balanced weighting. The model is computationally inexpensive, stable and interpretable, and serves as a reasonable baseline. |
+| **Decision Tree** | The weakest ranking model in the set (AUC 0.778). A single tree produces coarse, piecewise-constant probability estimates and therefore cannot generate the fine-grained confidence ordering that AUC rewards, even though its hard-label metrics (accuracy 0.735, F1 0.511) are comparable to logistic regression. A maximum depth of 9 and a minimum leaf size of 8 were required to control overfitting; the unpruned tree memorised the training split. Its main value in this comparison is as a baseline against which the ensemble gain can be measured. |
+| **kNN** | Illustrates why accuracy is an inadequate metric for this dataset. Its accuracy of 0.837 is the second highest in the table, but this is achieved through conservative prediction: a recall of 0.361 means the model fails to identify almost two-thirds of premium instances. With k=17 and distance weighting, a premium instance located in a neighbourhood dominated by non-premium instances is outvoted, and under an 81/19 class distribution most neighbourhoods are so dominated. Precision of 0.619 indicates that its positive predictions are nonetheless reasonably reliable. |
+| **Naive Bayes** | Ranks last on every metric (MCC 0.295, AUC 0.735). The cause is structural rather than a matter of tuning. GaussianNB assumes conditional independence of features given the class, an assumption clearly violated by this dataset: density is close to a deterministic function of alcohol and residual sugar, and the two sulfur dioxide variables are strongly correlated. Redundant evidence is therefore counted multiple times, yielding overconfident and poorly calibrated posterior probabilities. The model trains rapidly but carries an inappropriate inductive bias for correlated physicochemical measurements. |
+| **Random Forest (Ensemble)** | The strongest model overall: highest accuracy (0.847), AUC (0.854), precision (0.674) and MCC (0.426). Bootstrap aggregation with random feature subsampling addresses the variance problem that limits the single tree, while averaging across 450 trees restores the graded probability estimates that raise AUC by approximately 0.08 relative to one tree. The model performed better without class weighting: enabling `class_weight='balanced_subsample'` reduced MCC by roughly 0.03, as the resulting gain in recall did not compensate for the loss in precision. Its principal limitation is recall (0.377) at the default 0.5 decision threshold, which is a threshold selection issue rather than a limitation of the model itself. |
+| **Support Vector Machine (RBF)** | Essentially tied with the random forest on MCC (0.425 against 0.426), but occupying the opposite position in the precision-recall trade-off: it attains the highest recall (0.790) and the highest F1 (0.539) in the table, at a cost in accuracy (0.744). The RBF kernel combined with balanced class weights produces a non-linear and comparatively inclusive decision region for the positive class. It is the slowest of the six to train and the least interpretable, but is preferable where the cost of a false negative exceeds that of a false positive. |
+| **Overall winner for this dataset** | **Random Forest (Ensemble)**, which leads on MCC (0.4256), AUC (0.8541), accuracy (0.8474) and precision (0.6738), and is therefore the strongest model on the metric most appropriate to a 19% positive class rate. Two qualifications should be noted. First, its MCC advantage over the RBF SVM is 0.0006, which is within noise. Second, the SVM more than doubles its recall. The ensemble is preferable in terms of ranking quality and precision; the SVM is preferable in terms of coverage, and would be the better choice for a screening application in which false negatives are more costly than false positives. More generally, no model exceeds an MCC of 0.43, which suggests that physicochemical measurements alone have limited capacity to reproduce expert sensory judgements. |
 
 ## Streamlit app features
 
-* **CSV upload** — drop in any test file with the 12 feature columns plus `is_premium`; falls back to the bundled `test_data.csv`.
-* **Model dropdown** — switch between all six trained classifiers.
-* **Evaluation metrics** — all six metrics rendered live for the selected model.
-* **Confusion matrix, ROC curve and full classification report**, plus a "compare all six" table with a per-column heatmap and a grouped bar chart.
+* **CSV upload** — accepts any test file containing the 12 feature columns and `is_premium`; defaults to the bundled `test_data.csv`.
+* **Model selection dropdown** — selects among the six trained classifiers.
+* **Evaluation metrics** — all six metrics computed and displayed for the selected model.
+* **Confusion matrix, ROC curve and classification report**, together with a comparison table across all six models and a grouped bar chart.
 
 ## Notes
 
-* Random seed fixed at 2026 throughout, so every number above reproduces exactly.
+* The random seed is fixed at 2026 throughout, so all reported figures are exactly reproducible.
 * Models are trained offline by `model/train_models.py` and loaded from `.joblib`
-  files at runtime — the deployed app does no training, which keeps it inside the
-  Streamlit Community Cloud resource budget.
+  files at runtime. The deployed application performs no training, which keeps it
+  within the Streamlit Community Cloud resource limits.

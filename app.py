@@ -1,8 +1,8 @@
 """
-Cellar Check -- an interactive comparison of six classifiers that try to spot a
-premium Vinho Verde bottle from its lab chemistry alone.
+Wine Quality Classification -- Streamlit interface for ML Assignment 2.
 
-Streamlit front end for ML Assignment 2.
+Loads six pre-trained classifiers and evaluates them on a user-supplied or
+bundled test set, reporting accuracy, AUC, precision, recall, F1 and MCC.
 """
 
 from pathlib import Path
@@ -44,7 +44,9 @@ FEATURE_ORDER = [
     "wine_type",
 ]
 
-CATALOGUE = {
+CLASS_LABELS = ["Not premium", "Premium"]
+
+MODEL_FILES = {
     "Logistic Regression": "logistic_regression.joblib",
     "Decision Tree": "decision_tree.joblib",
     "kNN": "knn.joblib",
@@ -53,7 +55,10 @@ CATALOGUE = {
     "Support Vector Machine": "support_vector_machine.joblib",
 }
 
-st.set_page_config(page_title="Cellar Check", page_icon="🍷", layout="wide")
+st.set_page_config(
+    page_title="ML Assignment 2 - Wine Quality Classification",
+    layout="wide",
+)
 
 
 @st.cache_resource
@@ -67,7 +72,7 @@ def load_estimator(filename: str):
 
 
 @st.cache_data
-def load_bundled_holdout() -> pd.DataFrame:
+def load_bundled_test_set() -> pd.DataFrame:
     return pd.read_csv(HERE / "test_data.csv")
 
 
@@ -84,7 +89,7 @@ def metric_bundle(truth, predicted, scores) -> dict:
 
 def evaluate(frame: pd.DataFrame, label: str) -> dict:
     scaler = load_scaler()
-    estimator = load_estimator(CATALOGUE[label])
+    estimator = load_estimator(MODEL_FILES[label])
     X = scaler.transform(frame[FEATURE_ORDER])
     y = frame[TARGET]
     predicted = estimator.predict(X)
@@ -98,54 +103,54 @@ def evaluate(frame: pd.DataFrame, label: str) -> dict:
 
 
 # ----------------------------------------------------------------- sidebar --
-st.sidebar.title("🍷 Cellar Check")
+st.sidebar.title("Wine Quality Classification")
 st.sidebar.caption(
-    "Six classifiers, one question: is this bottle a **premium** wine "
-    "(sensory score ≥ 7)?"
+    "Binary classification: is a wine premium (sensory score >= 7), "
+    "given its physicochemical properties?"
 )
 
 uploaded = st.sidebar.file_uploader(
     "Upload test data (CSV)",
     type="csv",
-    help="Needs the 12 feature columns plus an `is_premium` column. "
-         "Leave empty to use the bundled hold-out slice.",
+    help="Must contain the 12 feature columns plus an `is_premium` column. "
+         "Leave empty to use the bundled test set.",
 )
 
-chosen = st.sidebar.selectbox("Model", list(CATALOGUE.keys()), index=4)
+chosen = st.sidebar.selectbox("Model", list(MODEL_FILES.keys()), index=4)
 show_all = st.sidebar.checkbox("Compare all six models", value=True)
 
 st.sidebar.markdown("---")
 st.sidebar.caption(
-    "Data: Cortez et al. (2009), Vinho Verde wine quality, UCI ML Repository."
+    "Data: Cortez et al. (2009), Wine Quality Data Set, UCI ML Repository."
 )
 
 # -------------------------------------------------------------- data intake --
 if uploaded is not None:
-    tasting_sheet = pd.read_csv(uploaded)
-    source_note = f"uploaded file — **{uploaded.name}**"
+    test_df = pd.read_csv(uploaded)
+    source_note = f"uploaded file **{uploaded.name}**"
 else:
-    tasting_sheet = load_bundled_holdout()
-    source_note = "bundled hold-out slice — **test_data.csv**"
+    test_df = load_bundled_test_set()
+    source_note = "bundled test set **test_data.csv**"
 
-missing = [c for c in FEATURE_ORDER + [TARGET] if c not in tasting_sheet.columns]
+missing = [c for c in FEATURE_ORDER + [TARGET] if c not in test_df.columns]
 if missing:
     st.error(f"These required columns are missing from your CSV: {missing}")
     st.stop()
 
-st.title("Can chemistry alone pick out a good bottle?")
+st.title("Wine Quality Classification - Model Comparison")
 st.write(
-    f"Scoring **{len(tasting_sheet):,}** bottles from the {source_note}. "
-    f"{tasting_sheet[TARGET].sum():,} of them are actually premium "
-    f"({tasting_sheet[TARGET].mean():.1%}) — a deliberately lopsided target, "
-    "which is exactly why MCC is more honest here than accuracy."
+    f"Evaluating on **{len(test_df):,}** instances from the {source_note}. "
+    f"The positive class (premium) accounts for {test_df[TARGET].sum():,} "
+    f"instances ({test_df[TARGET].mean():.1%}). Because the target is "
+    "imbalanced, MCC and AUC are more informative than accuracy."
 )
 
-with st.expander("Peek at the data"):
-    st.dataframe(tasting_sheet.head(15), width="stretch")
+with st.expander("Preview input data"):
+    st.dataframe(test_df.head(15), width="stretch")
 
 # ------------------------------------------------------------- single model --
-outcome = evaluate(tasting_sheet, chosen)
-st.subheader(f"{chosen} — evaluation metrics")
+outcome = evaluate(test_df, chosen)
+st.subheader(f"{chosen} - evaluation metrics")
 
 cols = st.columns(6)
 for col, (name, value) in zip(cols, outcome["metrics"].items()):
@@ -158,12 +163,11 @@ with left:
     cm = confusion_matrix(outcome["y"], outcome["pred"])
     fig, ax = plt.subplots(figsize=(4.2, 3.4))
     sns.heatmap(
-        cm, annot=True, fmt="d", cbar=False, cmap="rocket_r",
-        xticklabels=["everyday", "premium"],
-        yticklabels=["everyday", "premium"], ax=ax,
+        cm, annot=True, fmt="d", cbar=False, cmap="Blues",
+        xticklabels=CLASS_LABELS, yticklabels=CLASS_LABELS, ax=ax,
     )
-    ax.set_xlabel("predicted")
-    ax.set_ylabel("actual")
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
     st.pyplot(fig, width="stretch")
 
 with right:
@@ -173,8 +177,8 @@ with right:
     ax2.plot(fpr, tpr, lw=2,
              label=f"AUC = {outcome['metrics']['AUC']:.3f}")
     ax2.plot([0, 1], [0, 1], "--", lw=1, color="grey")
-    ax2.set_xlabel("false positive rate")
-    ax2.set_ylabel("true positive rate")
+    ax2.set_xlabel("False positive rate")
+    ax2.set_ylabel("True positive rate")
     ax2.legend(loc="lower right")
     st.pyplot(fig2, width="stretch")
 
@@ -182,35 +186,35 @@ st.markdown("**Classification report**")
 st.code(
     classification_report(
         outcome["y"], outcome["pred"],
-        target_names=["everyday", "premium"], digits=4,
+        target_names=CLASS_LABELS, digits=4,
     )
 )
 
 # ---------------------------------------------------------- all-model table --
 if show_all:
-    st.subheader("All six models on this test set")
-    board = pd.DataFrame(
-        [{"Model": name, **evaluate(tasting_sheet, name)["metrics"]}
-         for name in CATALOGUE]
+    st.subheader("Comparison of all six models on this test set")
+    results = pd.DataFrame(
+        [{"Model": name, **evaluate(test_df, name)["metrics"]}
+         for name in MODEL_FILES]
     ).set_index("Model")
 
     st.dataframe(
-        board.style
+        results.style
         .format("{:.4f}")
-        .background_gradient(cmap="Greens", axis=0),
+        .background_gradient(cmap="Blues", axis=0),
         width="stretch",
     )
 
-    champion = board["MCC"].idxmax()
+    best_model = results["MCC"].idxmax()
     st.success(
-        f"Best Matthews correlation on this test set: **{champion}** "
-        f"(MCC {board.loc[champion, 'MCC']:.4f}, "
-        f"AUC {board.loc[champion, 'AUC']:.4f})."
+        f"Highest Matthews correlation coefficient on this test set: "
+        f"**{best_model}** (MCC {results.loc[best_model, 'MCC']:.4f}, "
+        f"AUC {results.loc[best_model, 'AUC']:.4f})."
     )
 
     fig3, ax3 = plt.subplots(figsize=(9, 3.6))
-    board[["Accuracy", "F1", "MCC", "AUC"]].plot.bar(ax=ax3, width=0.8)
-    ax3.set_ylabel("score")
+    results[["Accuracy", "F1", "MCC", "AUC"]].plot.bar(ax=ax3, width=0.8)
+    ax3.set_ylabel("Score")
     ax3.set_ylim(0, 1)
     ax3.set_xlabel("")
     plt.xticks(rotation=20, ha="right")
